@@ -1,5 +1,9 @@
 # RoboChess Challenge
 
+> [!WARNING]
+> UNDER DEVELOPMENT: This project is actively being built and may change frequently.
+
+
 ![ChessRobot](images/title.png)
 
 Robotic chess manipulation in [NVIDIA Isaac Sim](https://developer.nvidia.com/isaac/sim), built around the [LeRobot SO-101](https://github.com/TheRobotStudio/SO-ARM100) arm. The project combines a cuMotion-based motion-planning extension, an Isaac Lab task scaffold for RL, and a set of chess scenarios (from a 1D toy board up to full 8x8 chess) used to develop and test pick-and-place manipulation.
@@ -60,4 +64,4 @@ python lab/ChessRobot/scripts/zero_agent.py --task=Template-Chessrobot-Direct-v0
 
 ## Status
 
-Active research project.
+Active challenge project.

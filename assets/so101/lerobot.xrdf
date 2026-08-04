@@ -1,0 +1,91 @@
+format: "xrdf"
+
+format_version: 2.0
+
+default_joint_positions: 
+  shoulder_pan: -0.0
+  shoulder_lift: 0.0075
+  elbow_flex: 0.0005
+  wrist_flex: 0.0001
+  wrist_roll: 0.0
+  gripper: 0.0012
+
+tool_frames: ["gripper_frame_link"]
+
+cspace:
+  joint_names: 
+    - "shoulder_pan"
+    - "shoulder_lift"
+    - "elbow_flex"
+    - "wrist_flex"
+    - "wrist_roll"
+    - "gripper"
+  acceleration_limits: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
+  jerk_limits: [10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0]
+
+world_collision: 
+  geometry: "auto_generated_collision_sphere_group"
+
+self_collision: 
+  geometry: "auto_generated_collision_sphere_group"
+  ignore: 
+    base_link: 
+      - "shoulder_link"
+    shoulder_link: 
+      - "upper_arm_link"
+    upper_arm_link: 
+      - "lower_arm_link"
+    lower_arm_link: 
+      - "wrist_link"
+    wrist_link: 
+      - "gripper_link"
+    gripper_link: 
+      - "moving_jaw_so101_v1_link"
+      - "gripper_frame_link"
+    moving_jaw_so101_v1_link: 
+      - "gripper_frame_link"
+
+geometry: 
+  auto_generated_collision_sphere_group: 
+    spheres: 
+      base_link: 
+        - center: [0.016, 0.0, 0.049]
+          radius: 0.0433
+      wrist_link: 
+        - center: [0.0, -0.045, 0.027]
+          radius: 0.0259
+      shoulder_link: 
+        - center: [-0.038, -0.0, 0.026]
+          radius: 0.02
+        - center: [-0.042, -0.0, -0.016]
+          radius: 0.02
+      upper_arm_link: 
+        - center: [-0.01, 0.0, 0.017]
+          radius: 0.03
+        - center: [-0.066, -0.003, 0.018]
+          radius: 0.03
+        - center: [-0.111, 0.002, 0.019]
+          radius: 0.02
+      lower_arm_link: 
+        - center: [-0.012, 0.0, 0.019]
+          radius: 0.025
+        - center: [-0.06, 0.001, 0.02]
+          radius: 0.025
+        - center: [-0.107, 0.002, 0.018]
+          radius: 0.025
+      gripper_link: 
+        - center: [0.017, 0.001, -0.023]
+          radius: 0.02
+        - center: [-0.021, -0.001, -0.024]
+          radius: 0.02
+        - center: [-0.021, -0.001, -0.061]
+          radius: 0.012
+        - center: [-0.015, -0.001, -0.091]
+          radius: 0.008
+      moving_jaw_so101_v1_link: 
+        - center: [-0.001, -0.03, 0.018]
+          radius: 0.01
+        - center: [-0.002, -0.05, 0.018]
+          radius: 0.008
+        - center: [-0.007, -0.072, 0.019]
+          radius: 0.006

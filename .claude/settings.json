@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(osmo pool list*)",
+      "Bash(osmo resource list*)",
+      "Bash(osmo workflow query*)",
+      "Bash(osmo workflow logs*)",
+      "Bash(osmo profile list*)",
+      "Bash(osmo version*)",
+      "Bash(osmo --version*)",
+      "Bash(nvidia-smi)",
+      "Bash(nvidia-smi --query-gpu=*)",
+      "Bash(nvcc --version)"
+    ]
+  }
+}

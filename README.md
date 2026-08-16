@@ -18,6 +18,7 @@ Robotic chess manipulation in [NVIDIA Isaac Sim](https://developer.nvidia.com/is
   - `8x8 chess` — standard full chess setup.
 - **Newton example** ([newton/example_so101.py](newton/example_so101.py)) — a standalone SO-101 example using the [Newton](https://github.com/newton-physics/newton) physics engine.
 - **Isaac Lab task** ([lab/ChessRobot](lab/ChessRobot)) — an Isaac Lab extension (`Template-Chessrobot-Direct-v0`) scaffolding the SO-101 chess environment for reinforcement learning.
+- **Franka chess picking** ([lab/docs/franka_chess_picking.md](lab/docs/franka_chess_picking.md)) — a Franka Emika Panda that picks and places chess pieces in Isaac Lab, grasps chosen by [GraspGen](https://github.com/NVlabs/GraspGen), with a scripted state machine generating demonstrations recorded through Isaac Lab's `RecorderManager`.
 
 ## Scenarios
 
@@ -30,7 +31,9 @@ Robotic chess manipulation in [NVIDIA Isaac Sim](https://developer.nvidia.com/is
 ```
 exts/cumotion.plan/   Isaac Sim Kit extension (UI + cuMotion-driven SO-101 pick-and-place)
 assets/                Robot, chess piece, and board USD assets
-lab/ChessRobot/        Isaac Lab extension/task for RL (Template-Chessrobot-Direct-v0)
+lab/source/robochess/  Isaac Lab manager-based tasks (visual scenes + Franka picking)
+lab/scripts/           Asset baking, GraspGen inference, demo generation, replay/render
+lab/docs/              Pipeline documentation
 newton/                Standalone SO-101 example using the Newton physics engine
 scripts/               Helper scripts (e.g. cuMotion)
 package/               Robot meshes (e.g. .dae)

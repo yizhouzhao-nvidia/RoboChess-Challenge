@@ -1,0 +1,6 @@
+# Baked chess-piece assets from lab/scripts/prepare_chess_assets.py.
+#
+# The rigid-body USDs, the piece metadata and the GraspGen results are small and
+# worth keeping; the OBJ exports are ~90 MB of full-resolution geometry that only
+# GraspGen consumes, and re-baking them takes about two minutes.
+*.obj

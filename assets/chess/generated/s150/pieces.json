@@ -1,0 +1,77 @@
+{
+  "scale": 1.5,
+  "pieces": {
+    "pawn": {
+      "scale": 1.5,
+      "height": 0.06968665627209703,
+      "base_diameter": 0.04705395922064781,
+      "narrowest_width": 0.011148782167464084,
+      "narrowest_width_height": 0.048012925041707524,
+      "mass": 0.025362440111710762,
+      "volume": 2.8180489013011956e-05,
+      "num_collision_hulls": 16,
+      "usd": "pawn.usd",
+      "obj": "pawn.obj"
+    },
+    "rook": {
+      "scale": 1.5,
+      "height": 0.07854004178079776,
+      "base_diameter": 0.05305907875299454,
+      "narrowest_width": 0.02363391779190245,
+      "narrowest_width_height": 0.057840081616536664,
+      "mass": 0.06017777417354257,
+      "volume": 6.686419352615841e-05,
+      "num_collision_hulls": 16,
+      "usd": "rook.usd",
+      "obj": "rook.obj"
+    },
+    "knight": {
+      "scale": 1.5,
+      "height": 0.09687534264230635,
+      "base_diameter": 0.054169513285160065,
+      "narrowest_width": 0.027123441976269105,
+      "narrowest_width_height": 0.09203157551019103,
+      "mass": 0.06326863670445967,
+      "volume": 7.029848522717742e-05,
+      "num_collision_hulls": 16,
+      "usd": "knight.usd",
+      "obj": "knight.obj"
+    },
+    "bishop": {
+      "scale": 1.5,
+      "height": 0.10842969951045234,
+      "base_diameter": 0.05187860503792763,
+      "narrowest_width": 0.006880243120071371,
+      "narrowest_width_height": 0.0940030361010108,
+      "mass": 0.04358501323754406,
+      "volume": 4.8427792486160065e-05,
+      "num_collision_hulls": 16,
+      "usd": "bishop.usd",
+      "obj": "bishop.obj"
+    },
+    "queen": {
+      "scale": 1.5,
+      "height": 0.12212983786594123,
+      "base_diameter": 0.057714974507689476,
+      "narrowest_width": 0.007973156815569062,
+      "narrowest_width_height": 0.10877835559076629,
+      "mass": 0.07851327936261561,
+      "volume": 8.72369770695729e-05,
+      "num_collision_hulls": 16,
+      "usd": "queen.usd",
+      "obj": "queen.obj"
+    },
+    "king": {
+      "scale": 1.5,
+      "height": 0.1405367486877367,
+      "base_diameter": 0.0589183084666729,
+      "narrowest_width": 0.008751491469987363,
+      "narrowest_width_height": 0.12684037063766065,
+      "mass": 0.10345913829644282,
+      "volume": 0.00011495459810715869,
+      "num_collision_hulls": 16,
+      "usd": "king.usd",
+      "obj": "king.obj"
+    }
+  }
+}

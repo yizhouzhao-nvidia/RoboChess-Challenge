@@ -57,7 +57,7 @@ BOARD_CENTER = (0.22, 0.0)
 which places the board ``ChessRobotSpec.board_distance`` in front of whichever arm is
 selected -- these robots differ by more than 2x in reach."""
 
-DEFAULT_BOARD_SCALE = {"pieces": 1.4, "1d": 1.4, "3x3": 1.4, "4x4": 1.4, "8x8": 1.0}
+DEFAULT_BOARD_SCALE = {"pieces": 1.4, "1d": 1.4, "3x3": 1.4, "4x4": 1.4, "minichess": 1.4, "8x8": 1.0}
 """How much to stretch the squares, per scenario.
 
 At scale 1.0 the 1.5x pieces fill 78-98% of a 60 mm square: a king and its

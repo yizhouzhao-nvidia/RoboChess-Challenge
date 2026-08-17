@@ -29,7 +29,16 @@ SQUARE_SIZE = 0.06
 PIECE_KINDS = ("pawn", "rook", "knight", "bishop", "queen", "king")
 """Piece assets available under ``assets/chess`` (and baked into ``generated/``)."""
 
-SUPPORTED_SCENARIOS = ("pieces", "1d", "3x3", "4x4", "8x8")
+SUPPORTED_SCENARIOS = ("pieces", "1d", "3x3", "4x4", "minichess", "8x8")
+
+PLAYABLE_SCENARIOS = ("1d", "3x3", "minichess")
+"""Scenarios with a full rule set, usable for robot-vs-robot games.
+
+``1d`` and ``3x3`` double as pick-and-place layouts because they are already
+symmetric. ``4x4`` is not -- both kings start on file 0 -- so ``minichess`` exists
+as the mirrored version rather than changing ``4x4`` underneath the dataset that
+was recorded on it.
+"""
 
 
 @dataclass(frozen=True)
@@ -174,6 +183,21 @@ def make_layout(scenario: str, board_scale: float = 1.0) -> BoardLayout:
             pieces += _back_rank(color, _BACK_RANK_4X4, back, counts)
             pieces += [PieceSpec(color, "pawn", file, file, pawn) for file in range(4)]
         return BoardLayout("4x4", "board_4x4.usdc", num_files=4, num_ranks=4, pieces=tuple(pieces), **common)
+
+    if scenario == "minichess":
+        # 4x4 with the black back rank mirrored, so the kings face each other across
+        # the board rather than sharing a file. This is the layout the rules engine
+        # plays; plain "4x4" is left alone because a recorded dataset maps its piece
+        # indices through that layout.
+        counts = {}
+        pieces = []
+        for color, back, pawn, order in (
+            ("white", 0, 1, _BACK_RANK_4X4),
+            ("black", 3, 2, tuple(reversed(_BACK_RANK_4X4))),
+        ):
+            pieces += _back_rank(color, order, back, counts)
+            pieces += [PieceSpec(color, "pawn", file, file, pawn) for file in range(4)]
+        return BoardLayout("minichess", "board_4x4.usdc", num_files=4, num_ranks=4, pieces=tuple(pieces), **common)
 
     if scenario == "8x8":
         counts = {}

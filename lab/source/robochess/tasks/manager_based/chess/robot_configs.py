@@ -154,7 +154,16 @@ YAM_USD_PATH = os.environ.get(
     "https://github.com/ARISE-Initiative/yamlab/raw/refs/heads/main/yamlab/robot/yam/arm/yam.usd",
 )
 YAM_CFG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(usd_path=YAM_USD_PATH, activate_contact_sensors=True),
+    spawn=sim_utils.UsdFileCfg(
+        usd_path=YAM_USD_PATH,
+        activate_contact_sensors=True,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(disable_gravity=True, max_depenetration_velocity=5.0),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=False,
+            solver_position_iteration_count=32,
+            solver_velocity_iteration_count=0,
+        ),
+    ),
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={
             "joint1": 0.0,
@@ -163,16 +172,33 @@ YAM_CFG = ArticulationCfg(
             "joint4": 0.0,
             "joint5": 0.0,
             "joint6": 0.0,
+            # -0.04695 is the *open* pose and 0 is closed, as upstream documents.
+            #
+            # Do not "correct" this from ``probe_robot.py`` output: that script reports the
+            # separation of the finger *body origins*, which for this gripper move opposite
+            # to the pads (90.1 mm apart at joint 0, 4.9 mm at the -0.0475 limit). Reading
+            # those as jaw width inverts the convention, and the arm then descends with the
+            # gripper shut, knocks the piece over, and opens on empty air. The only reliable
+            # test is behavioural: command a close on a piece and check that it lifts.
             "left_finger": -0.04695,
             "right_finger": -0.04695,
         }
     ),
+    soft_joint_pos_limit_factor=1.0,
     actuators={
         "arm": ImplicitActuatorCfg(
-            joint_names_expr=["joint[1-6]"], effort_limit_sim=20.0, stiffness=120.0, damping=12.0
+            joint_names_expr=["joint[1-6]"],
+            effort_limit_sim=20.0,
+            velocity_limit_sim=2.0,
+            stiffness=120.0,
+            damping=12.0,
         ),
         "gripper": ImplicitActuatorCfg(
-            joint_names_expr=["left_finger", "right_finger"], effort_limit_sim=20.0, stiffness=200.0, damping=2.0
+            joint_names_expr=["left_finger", "right_finger"],
+            effort_limit_sim=20.0,
+            velocity_limit_sim=0.25,
+            stiffness=200.0,
+            damping=2.0,
         ),
     },
 )
@@ -259,6 +285,17 @@ class ChessRobotSpec:
 
     reach: float
     """Comfortable planar reach from the base [m]; bounds which squares are used."""
+
+    settle_scale: float = 1.0
+    """Multiplier on every phase's ``settle_timeout`` in the demo generator.
+
+    Differential IK converges at a rate set by the arm's own dynamics, and the slow ones
+    need several times longer to reach the millimetre gate the descend and place phases
+    demand. Measure it with ``probe_reach.py --settle_steps``: yam sits at 12 mm after
+    150 steps and 0-2 mm after 500, so it needs roughly 4x the default budget. Raising
+    this is close to free -- a phase rolls over as soon as it *arrives*, so the deadline
+    only binds on the phases that would otherwise have given up early.
+    """
 
     board_distance: float = 0.45
     """How far in front of the base the board centre is placed [m].
@@ -371,21 +408,29 @@ REBOT_CHESS_CFG.actuators["arm"].effort_limit_sim = 300.0
 REBOT_CHESS_CFG.actuators["gripper"].stiffness = 2000.0
 REBOT_CHESS_CFG.actuators["gripper"].damping = 100.0
 
+# Upstream's tuning is used verbatim -- gravity disabled on the links, 32 solver
+# position iterations, and a gripper that closes gently (200 N/m, 20 N, 0.25 m/s).
+#
+# An earlier version of this file overrode all three and yam picked up nothing:
+#   * assigning a fresh ``ArticulationRootPropertiesCfg`` to set one flag silently
+#     dropped ``solver_position_iteration_count=32`` with it, so contacts were resolved
+#     too coarsely for a pinch on an 8 mm shaft to survive the lift;
+#   * dropping ``disable_gravity`` made the arm sag ~50 mm, which was misread as an
+#     effort ceiling and "fixed" by raising the arm gains 15-25x;
+#   * the gripper was then given 10x the stiffness, 25x the force and no closing-speed
+#     limit, which ejects a 44 g piece rather than holding it.
+# Mutate fields rather than replacing the cfg objects, or the same thing happens again.
 YAM_CHESS_CFG = YAM_CFG.copy()
+
+# The one deliberate departure from upstream. Its 120/12/20 arm is tuned for teleop,
+# where a human closes the loop and nothing demands millimetre tracking. This task gates
+# the descend phase on 3 mm / 2.3 deg at board height on a grasp tilted up to 24 deg;
+# ``probe_reach.py`` measures the stock gains reaching only 10-14 mm there, so the gate
+# never opens, the deadline fires, and the gripper closes while the arm is still moving.
+# The gripper is left alone -- stiffening *it* was what ejected the piece.
 YAM_CHESS_CFG.actuators["arm"].stiffness = 3000.0
 YAM_CHESS_CFG.actuators["arm"].damping = 250.0
 YAM_CHESS_CFG.actuators["arm"].effort_limit_sim = 300.0
-YAM_CHESS_CFG.actuators["gripper"].stiffness = 2000.0
-YAM_CHESS_CFG.actuators["gripper"].damping = 100.0
-# The two YAM finger meshes overlap in their rest pose, so with self-collisions on
-# PhysX fights the gripper drive and the fingers never leave ~1 mm of travel however
-# hard they are pushed. Disabling self-collisions (as the upstream YAM config does)
-# and raising the effort ceiling makes the joints track their command exactly.
-YAM_CHESS_CFG.spawn.articulation_props = sim_utils.ArticulationRootPropertiesCfg(enabled_self_collisions=False)
-YAM_CHESS_CFG.actuators["gripper"].effort_limit_sim = 500.0
-YAM_CHESS_CFG.init_state = ArticulationCfg.InitialStateCfg(
-    joint_pos={**{f"joint{i}": 0.0 for i in range(1, 7)}, "left_finger": 0.0, "right_finger": 0.0}
-)
 
 
 CHESS_ROBOTS: dict[str, ChessRobotSpec] = {
@@ -460,20 +505,36 @@ CHESS_ROBOTS: dict[str, ChessRobotSpec] = {
         base_relative_prim_path="arm/arm",
         ee_body="link_6",
         ee_relative_prim_path="arm/link_6",
-        # Bracketed empirically: 0.09 and 0.145 both give 0 successes in 16 attempts,
-        # 0.13 gives 12%. The probe can locate the finger *bodies* but not the pad
-        # face they grip with, so the last centimetre has to be found by trying.
+        # The probe locates the finger *bodies* but not the pad face they grip with, so
+        # this was bracketed by trying. It agrees with the ``body_offset`` used by the
+        # I2RT teleop config for the same USD, which is the best confirmation available.
         tcp_offset=(0.0, 0.0, 0.13),
         approach_axis=(0.0, 0.0, 1.0),
         closing_axis=(1.0, 0.0, 0.0),
-        # Measured, and the reverse of what the upstream config's comment implies:
-        # joint 0 holds the fingers 90 mm apart, -0.0475 brings them together.
-        open_command={"left_finger": 0.0, "right_finger": 0.0},
-        close_command={"left_finger": -0.0475, "right_finger": -0.0475},
+        # Opposite in sign to rebot's, which runs [0, 0.045] with 0 closed. That asymmetry
+        # is real -- the two USDs simply author their prismatic limits from opposite ends
+        # ([-0.0475, 0] here) -- and is why these commands are per robot. Verified the only
+        # way that counts: with these values the arm lifts a piece on the first attempt;
+        # inverted, it descends shut, topples the piece, and opens on air.
+        open_command={"left_finger": -0.0475, "right_finger": -0.0475},
+        close_command={"left_finger": 0.0, "right_finger": 0.0},
         max_opening=0.090,
         reach=0.42,
+        settle_scale=4.0,
         board_distance=0.30,
-        home_joint_pos={"joint1": 0.0, "joint2": 1.25, "joint3": 1.25, "joint4": 0.0, "joint5": 0.85, "joint6": 0.0},
+        # The fingers are listed because :meth:`set_robot` *replaces* the articulation's
+        # ``joint_pos`` with this dict rather than merging into it -- omit them and the
+        # gripper spawns at whatever the USD authors rather than open.
+        home_joint_pos={
+            "joint1": 0.0,
+            "joint2": 1.25,
+            "joint3": 1.25,
+            "joint4": 0.0,
+            "joint5": 0.85,
+            "joint6": 0.0,
+            "left_finger": -0.04695,
+            "right_finger": -0.04695,
+        },
         finger_bodies=["left_finger", "right_finger"],
     ),
 }

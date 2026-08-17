@@ -25,6 +25,9 @@ from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Replay and render Franka chess demonstrations.")
 parser.add_argument("--task", type=str, default="RoboChess-Franka-Chess-IK-Abs-v0")
+parser.add_argument(
+    "--robot", type=str, default=None, help="Arm the dataset was recorded with: franka, piper, rebot or yam."
+)
 parser.add_argument("--chess_scenario", choices=("pieces", "1d", "3x3", "4x4", "8x8"), default="4x4")
 parser.add_argument(
     "--dataset_file", type=str, default="./lab/datasets/franka_chess_pick.hdf5", help="Recorded dataset to replay."
@@ -188,6 +191,10 @@ def main():
     print(f"[INFO] {dataset_path.name} holds {len(episode_names)} episodes")
 
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=1)
+    # The arm has to match the one the dataset was recorded with, or the replayed
+    # actions drive a different kinematic chain and the pieces never get touched.
+    if args_cli.robot:
+        env_cfg.set_robot(args_cli.robot)
     env_cfg.set_chess_scenario(args_cli.chess_scenario)
     # Replays are driven purely by the recorded actions, so nothing should end an
     # episode early or nudge the pieces on reset.

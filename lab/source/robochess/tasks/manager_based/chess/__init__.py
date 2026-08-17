@@ -35,3 +35,15 @@ gym.register(
     disable_env_checker=True,
     kwargs={"env_cfg_entry_point": f"{__name__}.franka_chess_env_cfg:ChessPickEnvCfg"},
 )
+
+##
+# Robot vs robot: two arms play a chess variant against each other. Pick the pair
+# with cfg.set_players(white, black), or with --white/--black on the game script.
+##
+
+gym.register(
+    id="RoboChess-Chess-Game-IK-Abs-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={"env_cfg_entry_point": f"{__name__}.chess_game_env_cfg:ChessGameEnvCfg"},
+)

@@ -19,6 +19,7 @@ Robotic chess manipulation in [NVIDIA Isaac Sim](https://developer.nvidia.com/is
 - **Newton example** ([newton/example_so101.py](newton/example_so101.py)) — a standalone SO-101 example using the [Newton](https://github.com/newton-physics/newton) physics engine.
 - **Isaac Lab task** ([lab/ChessRobot](lab/ChessRobot)) — an Isaac Lab extension (`Template-Chessrobot-Direct-v0`) scaffolding the SO-101 chess environment for reinforcement learning.
 - **Franka chess picking** ([lab/docs/franka_chess_picking.md](lab/docs/franka_chess_picking.md)) — a Franka Emika Panda that picks and places chess pieces in Isaac Lab, grasps chosen by [GraspGen](https://github.com/NVlabs/GraspGen), with a scripted state machine generating demonstrations recorded through Isaac Lab's `RecorderManager`.
+- **Robot vs robot chess** ([lab/docs/robot_vs_robot_chess.md](lab/docs/robot_vs_robot_chess.md)) — two arms facing each other across the board, one playing white and one playing black, with legal moves supplied by a rule set for 1D chess, 3x3 Hexapawn and 4x4 minichess.
 
 ## Scenarios
 

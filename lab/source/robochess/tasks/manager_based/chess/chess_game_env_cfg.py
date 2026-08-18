@@ -63,6 +63,25 @@ GAME_TABLE_SIZE = (1.90, 1.10, TABLE_TOP_Z)
 
 PLAYERS = ("white", "black")
 
+FACING_HOME_JOINT_POS = {
+    # Two arms facing each other sit ``2 x board_distance`` apart -- 0.90 m for a pair of
+    # Frankas, each with 0.68 m of reach, so their workspaces overlap heavily across the
+    # middle. The single-arm home pose reaches *forward* over the board, which puts both
+    # wrists in the same place and has them resting against each other before the game
+    # even starts. These postures fold each arm back over its own base instead.
+    "franka": {
+        "panda_joint1": 0.0,
+        "panda_joint2": -1.05,
+        "panda_joint3": 0.0,
+        "panda_joint4": -2.62,
+        "panda_joint5": 0.0,
+        "panda_joint6": 1.72,
+        "panda_joint7": 0.785,
+        "panda_finger_joint.*": 0.04,
+    },
+}
+"""Per-arm rest posture for the facing-pair layout, falling back to the single-arm home."""
+
 
 @configclass
 class ChessGameSceneCfg(InteractiveSceneCfg):
@@ -262,8 +281,9 @@ class ChessGameEnvCfg(ManagerBasedRLEnvCfg):
             pos, rot = self.base_pose(player)
 
             init_state = spec.articulation.init_state.replace(pos=pos, rot=rot)
-            if spec.home_joint_pos:
-                init_state = init_state.replace(joint_pos=dict(spec.home_joint_pos))
+            home = FACING_HOME_JOINT_POS.get(spec.key, spec.home_joint_pos)
+            if home:
+                init_state = init_state.replace(joint_pos=dict(home))
             setattr(
                 self.scene,
                 entity,

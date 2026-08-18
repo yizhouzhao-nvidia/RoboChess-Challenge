@@ -14,21 +14,22 @@ def load(rel, box=None):
     im = Image.open(ROOT / rel).convert("RGB")
     return np.asarray(im.crop(box) if box else im)
 
-# Filmstrips are 3x2 grids of 1280x720; take the "carry" frame (row 1, col 0).
-CARRY = (0, 720, 1280, 1440)
-GRASP = (2560, 0, 3840, 720)
+# The "showcase" camera frames the whole arm; the default replay view is aimed at the
+# board and cuts every robot off above the elbow. Frame 03 is the carry moment, and the
+# top 44 px are trimmed to drop the burnt-in caption.
+CARRY_FRAME = (0, 44, 1280, 720)
 arms = [
-    ("Franka Panda", load("lab/datasets/renders_8x8/demo_0_filmstrip.png", CARRY)),
-    ("reBot",        load("lab/datasets/renders_rebot/demo_0_filmstrip.png", CARRY)),
-    ("Piper",        load("lab/datasets/renders_piper/demo_0_filmstrip.png", CARRY)),
-    ("YAM",          load("lab/datasets/renders_yam/demo_0_filmstrip.png", CARRY)),
+    ("Franka Panda", load("lab/docs/images/showcase_franka/demo_0_frames/03.png", CARRY_FRAME)),
+    ("reBot",        load("lab/docs/images/showcase_rebot/demo_0_frames/03.png", CARRY_FRAME)),
+    ("Piper",        load("lab/docs/images/showcase_piper/demo_0_frames/03.png", CARRY_FRAME)),
+    ("YAM",          load("lab/docs/images/showcase_yam/demo_0_frames/03.png", CARRY_FRAME)),
 ]
 variants = [
     # The 1D board runs away from the head-on camera, so it reads as a stub there;
               # the angled render shows all six pieces and the gap between the sides.
-              ("1D chess  ·  K N R", load("lab/docs/images/hero_1d_angle.png", (450, 430, 1350, 790))),
-    ("3x3 Hexapawn  ·  mixed arms", load("lab/docs/images/hero_3x3_hero.png", (430, 400, 1420, 795))),
-    ("4x4 minichess", load("lab/docs/images/hero_minichess_hero.png", (430, 400, 1420, 795))),
+              ("1D chess  ·  K N R", load("lab/docs/images/hero_1d_angle.png", (480, 480, 1380, 840))),
+    ("3x3 Hexapawn", load("lab/docs/images/hero_3x3_hero.png", (450, 640, 1350, 1000))),
+    ("4x4 minichess", load("lab/docs/images/hero_minichess_hero.png", (450, 620, 1350, 980))),
 ]
 hero = load("lab/docs/images/hero_minichess_hero.png", (60, 0, 1740, 1000))
 

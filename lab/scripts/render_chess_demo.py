@@ -42,7 +42,7 @@ parser.add_argument("--video_stride", type=int, default=1, help="Keep every n-th
 parser.add_argument("--save_frames", action="store_true", help="Keep the individual key frames as PNGs.")
 parser.add_argument(
     "--view",
-    choices=("three_quarter", "front", "top"),
+    choices=("showcase", "three_quarter", "front", "top"),
     default="three_quarter",
     help="Camera placement relative to the board.",
 )
@@ -78,6 +78,10 @@ from isaaclab_tasks.utils import parse_env_cfg
 # on the table top and the capture tray is off to -y, so the default view keeps both
 # the board and the tray in shot.
 VIEWS = {
+    # Frames the whole arm, not just the board: the other views tilt down from
+    # roughly wrist height and cut the robot off above the elbow, which is fine for
+    # watching a grasp but useless for a figure that has to show which robot it is.
+    "showcase": ((1.32, -1.18, 1.78), (-0.02, 0.0, 1.02)),
     "three_quarter": ((0.78, -0.66, 1.24), (0.16, -0.12, 0.83)),
     "front": ((0.95, 0.0, 1.06), (0.12, 0.0, 0.84)),
     "top": ((0.26, -0.16, 1.55), (0.22, -0.14, 0.77)),

@@ -21,8 +21,8 @@ from isaaclab_tasks.utils import parse_env_cfg
 import robochess.tasks  # noqa: F401
 
 VIEWS = {
-    "hero":  ((0.0, -1.85, 1.60), (0.0, 0.0, 0.92)),
-    "angle": ((-1.15, -1.35, 1.50), (0.0, 0.0, 0.88)),
+    "hero":  ((0.0, -2.75, 2.10), (0.0, 0.0, 1.20)),
+    "angle": ((-1.55, -1.80, 1.85), (0.0, 0.0, 1.00)),
 }
 
 def camera_cfg():
@@ -37,7 +37,7 @@ def camera_cfg():
 out = Path(args_cli.out); out.mkdir(parents=True, exist_ok=True)
 for scenario, pair in (("minichess", ("franka", "franka")),
                        ("1d", ("franka", "franka")),
-                       ("3x3", ("franka", "piper"))):
+                       ("3x3", ("franka", "franka"))):
     cfg = parse_env_cfg("RoboChess-Chess-Game-IK-Abs-v0", device=args_cli.device, num_envs=1)
     cfg.set_players(*pair)
     cfg.set_chess_scenario(scenario)

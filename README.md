@@ -65,6 +65,25 @@ For the Isaac Lab RL task:
 python lab/ChessRobot/scripts/zero_agent.py --task=Template-Chessrobot-Direct-v0
 ```
 
+## AI coding agents
+
+Agent configuration for this repo lives in the [.agent](.agent) folder. `.claude` and
+`.codex` are symlinks to it, so Claude Code and Codex share one source of truth.
+
+```
+.agent/
+├── settings.json   Permissions and tool settings
+├── agents/         Subagent definitions (e.g. isaaclab)
+├── skills/         Skills
+└── commands/       Slash commands
+```
+
+- **`isaaclab`** ([.agent/agents/isaaclab.md](.agent/agents/isaaclab.md)) — Isaac Lab
+  specialist for task configs, MDP terms, scene/asset setup, and the scripts under `lab/`.
+
+If you are Claude Code or Codex working in this repo, look in `.agent/` for the available
+agents, skills, and commands before starting a task.
+
 ## Status
 
 Active challenge project.

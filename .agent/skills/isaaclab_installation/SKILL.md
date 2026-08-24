@@ -134,6 +134,11 @@ an install — it downloads many GB and is slow.
   cache, not logic bugs.
 - Do not commit or push unless asked.
 
-## Instructions
+## Install RoboChess Challenge into IsaacLab.
 
-<!-- User-provided instructions will be added here. -->
+```bash
+cd lab
+uv pip install -e .
+```
+
+Verify installation

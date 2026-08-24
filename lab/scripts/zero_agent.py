@@ -19,12 +19,12 @@ parser.add_argument(
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument(
-    "--chess_scenario", choices=("1d", "3x3", "4x4", "8x8"), default="4x4",
-    help="Chess setup for RoboChess-UR10-Visual-v0.",
+    "--chess_scenario", choices=("pieces", "1d", "3x3", "4x4", "8x8"), default=None,
+    help="Chess setup for a RoboChess task (uses the task's default when omitted).",
 )
 parser.add_argument(
     "--robot", choices=("so101", "piper", "ur10", "flexiv_rizon", "rebot", "yam"), default="ur10",
-    help="Robot for RoboChess-UR10-Visual-v0.",
+    help="Robot for RoboChess-Visual-v0.",
 )
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -51,9 +51,10 @@ def main():
     env_cfg = parse_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
     )
-    if args_cli.task == "RoboChess-UR10-Visual-v0":
+    if args_cli.task in ("RoboChess-Visual-v0", "RoboChess-Chess-Pick-IK-Abs-v0"):
         env_cfg.set_robot(args_cli.robot)
-        env_cfg.set_chess_scenario(args_cli.chess_scenario)
+        if args_cli.chess_scenario is not None:
+            env_cfg.set_chess_scenario(args_cli.chess_scenario)
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 

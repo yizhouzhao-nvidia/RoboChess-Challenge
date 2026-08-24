@@ -133,7 +133,7 @@ def main():
         add_text(s, name, x, y + 0.13, 1.47, 0.2, 12, INK, True, PP_ALIGN.CENTER)
     rect(s, 0.82, 4.0, 11.66, 1.48, PALE, radius=True)
     add_text(s, "Launch contract", 1.12, 4.25, 2.0, 0.28, 16, NAVY, True)
-    code = "python scripts/zero_agent.py --task RoboChess-UR10-Visual-v0 --chess_scenario 1d --robot ur10"
+    code = "python scripts/zero_agent.py --task RoboChess-Visual-v0 --chess_scenario 1d --robot ur10"
     rect(s, 3.18, 4.22, 8.72, 0.5, NAVY, radius=True)
     add_text(s, code, 3.45, 4.36, 8.18, 0.18, 12, WHITE)
     add_text(s, "Local chess USD assets • table and camera • stationary single-arm visual scene • no teleoperation", 1.12, 4.98, 10.5, 0.22, 12, MUTED)

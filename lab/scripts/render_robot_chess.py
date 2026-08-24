@@ -28,7 +28,7 @@ from isaaclab_tasks.utils import parse_env_cfg
 
 def main() -> None:
     env_cfg = parse_env_cfg(
-        "RoboChess-UR10-Visual-v0",
+        "RoboChess-Visual-v0",
         device=args_cli.device,
         num_envs=1,
         use_fabric=not args_cli.disable_fabric,
@@ -49,7 +49,7 @@ def main() -> None:
         ),
         offset=CameraCfg.OffsetCfg(convention="ros"),
     )
-    env = gym.make("RoboChess-UR10-Visual-v0", cfg=env_cfg)
+    env = gym.make("RoboChess-Visual-v0", cfg=env_cfg)
     env.reset()
     camera = env.unwrapped.scene["render_camera"]
     camera.set_world_poses_from_view(

@@ -36,6 +36,8 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
+import numpy as np
+
 # board_layout first, and unconditionally: importing it installs the package's two
 # import-time guards -- PXR_WORK_THREAD_LIMIT and the sys.path shield. make_viewer
 # imports newton.viewer, which puts pxr in sys.modules on both newton versions, so
@@ -181,6 +183,55 @@ def _resolve_kind(args: argparse.Namespace, wants_capture: bool) -> str:
     return "gl" if wants_capture else "usd"
 
 
+def _write_instance_colors(viewer: Any, name: str, colors: Any) -> None:
+    """Author ``displayColor`` on the instances ``log_instances`` just created.
+
+    ``ViewerUSD.log_instances`` accepts per-instance colours and drops them:
+
+        displayColor = UsdGeom.PrimvarsAPI(instance).GetPrimvar("displayColor")
+        displayColor.Set(colors[i], self._frame_index)
+
+    ``GetPrimvar`` on a prim that never had the primvar returns an *invalid*
+    ``Primvar``, so the ``Set`` is a silent no-op and every mesh in the exported
+    stage inherits the default grey -- black chess pieces included.  Creating the
+    primvar first is the whole fix.  Present in both newton 1.2.1 and 1.6.0.dev0,
+    so it is shimmed here rather than worked around per version.
+    """
+    from pxr import Gf, Sdf, UsdGeom, Vt
+
+    values = colors.numpy() if hasattr(colors, "numpy") else colors
+    values = np.asarray(values, dtype=np.float32).reshape(-1, 3)
+    # newton 1.6 namespaces names by layer and is documented idempotent, so
+    # re-qualifying the already-qualified name is safe; 1.2.1 has no layers and no
+    # _qualify at all, where the name is already the final one.
+    qualify = getattr(viewer, "_qualify", None)
+    base = viewer._get_path(qualify(name) if qualify else name)
+    for index, rgb in enumerate(values):
+        prim = viewer.stage.GetPrimAtPath(f"{base}/instance_{index}")
+        if not prim:
+            continue
+        primvar = UsdGeom.PrimvarsAPI(prim).CreatePrimvar(
+            "displayColor", Sdf.ValueTypeNames.Color3fArray, UsdGeom.Tokens.constant
+        )
+        primvar.Set(Vt.Vec3fArray([Gf.Vec3f(*(float(c) for c in rgb))]), viewer._frame_index)
+
+
+def _fix_instance_colors(viewer: Any) -> None:
+    """Make this ``ViewerUSD`` write the per-instance colours it is given.
+
+    Wraps the bound method rather than subclassing, so it applies to whatever
+    ``ViewerUSD`` the installed newton provides.
+    """
+    original = viewer.log_instances
+
+    def log_instances(name, mesh, xforms, scales, colors, materials, hidden=False):
+        original(name, mesh, xforms, scales, colors, materials, hidden)
+        if colors is not None:
+            _write_instance_colors(viewer, name, colors)
+
+    viewer.log_instances = log_instances
+
+
 def _force_exact_timecodes(viewer: Any, fps: int) -> None:
     """Drive ``ViewerUSD``'s timecode off a frame counter instead of the sim clock.
 
@@ -254,6 +305,7 @@ def make_viewer(
             up_axis="Z",
             num_frames=args.num_frames if args.num_frames > 0 else None,
         )
+        _fix_instance_colors(viewer)
         if exact_timecodes:
             _force_exact_timecodes(viewer, args.fps)
         return viewer, None

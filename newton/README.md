@@ -501,6 +501,13 @@ several are the reason a line of code looks the way it does.
   are stale after `collapse_fixed_joints` and cancelled gravity on the first five chess pieces, and
   `mujoco:actuator_trnid` is not offset by `add_builder`, so a merged second arm's torque limits
   clamped the *first* arm. `ChessScene.describe()` reports both when they fire.
+* **`ViewerUSD` drops the colours it is given, and we shim it.** Its `log_instances()` does
+  `PrimvarsAPI(instance).GetPrimvar("displayColor").Set(...)` on a prim that never had the primvar
+  created, so the `Set` is a silent no-op: every mesh in the exported stage renders in the default
+  grey, and the black chess pieces come out white in usdview and Isaac Sim. The GL viewer has its
+  own path and was always correct, which is what makes this easy to miss.
+  `viewer_utils._fix_instance_colors()` wraps the method and creates the primvar first. Present in
+  both newton 1.2.1 and 1.6.0.dev0; drop the shim if upstream fixes it.
 * **Never run the Isaac Lab interpreter with cwd `~/Projects/newton`** -- it imports the 1.6 source
   tree while `newton.__version__` still reports 1.2.1 from the installed distribution's metadata.
 * **A cold `~/.cache/warp` costs ~49 s** on the first `SolverMuJoCo.step` while kernels compile,

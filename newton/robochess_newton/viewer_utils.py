@@ -232,6 +232,54 @@ def _fix_instance_colors(viewer: Any) -> None:
     viewer.log_instances = log_instances
 
 
+def _split_batches_by_color(viewer: Any) -> None:
+    """Make this ``ViewerRerun`` honour more than one colour per instancer.
+
+    ``ViewerBase`` batches shapes by ``_hash_shape(geo_hash, static, flags)``, and
+    ``geo_hash`` folds in ``newton.Mesh.__hash__``, which is content-based.  A white
+    king and a black king therefore share a batch: same geometry, same flags, and the
+    colour is not part of the key.  ``ViewerRerun.log_instances`` then does what its own
+    comment says -- "ReRun doesn't support per-instance colors so we just use the first
+    instance's color for all instances" -- and every piece comes out in whichever colour
+    happened to be first, i.e. white.
+
+    Giving the two colours distinct :class:`newton.Mesh` objects does *not* help, because
+    the content hash collapses them again.  So the split has to happen here: one rerun
+    entity per distinct colour within a batch, each logged with a uniform colour.  The GL
+    viewer resolves colours per instance and needs none of this.
+    """
+    import warp as wp
+
+    original = viewer.log_instances
+
+    def log_instances(name, mesh, xforms, scales, colors, materials, hidden=False):
+        if colors is None or xforms is None:
+            original(name, mesh, xforms, scales, colors, materials, hidden)
+            return
+
+        rgb = np.asarray(viewer._to_numpy(colors), dtype=np.float32).reshape(-1, 3)
+        unique, inverse = np.unique(rgb, axis=0, return_inverse=True)
+        if len(unique) < 2:
+            original(name, mesh, xforms, scales, colors, materials, hidden)
+            return
+
+        poses = np.asarray(viewer._to_numpy(xforms))
+        scale_values = None if scales is None else np.asarray(viewer._to_numpy(scales))
+        for index in range(len(unique)):
+            picked = np.flatnonzero(inverse == index)
+            original(
+                f"{name}/color_{index}",
+                mesh,
+                wp.array(poses[picked], dtype=wp.transform),
+                None if scale_values is None else wp.array(scale_values[picked], dtype=wp.vec3),
+                wp.array(rgb[picked], dtype=wp.vec3),
+                materials,
+                hidden,
+            )
+
+    viewer.log_instances = log_instances
+
+
 def _force_exact_timecodes(viewer: Any, fps: int) -> None:
     """Drive ``ViewerUSD``'s timecode off a frame counter instead of the sim clock.
 
@@ -323,8 +371,12 @@ def make_viewer(
             import newton._src.viewer.viewer_rerun as viewer_rerun
 
             viewer_rerun.is_jupyter_notebook = lambda: True
-            return nv.ViewerRerun(app_id="robochess", record_to_rrd=_prepare_output(args.output_path)), None
-        return nv.ViewerRerun(app_id="robochess", address=args.rerun_address, serve_web_viewer=True), None
+            viewer = nv.ViewerRerun(app_id="robochess", record_to_rrd=_prepare_output(args.output_path))
+            _split_batches_by_color(viewer)
+            return viewer, None
+        viewer = nv.ViewerRerun(app_id="robochess", address=args.rerun_address, serve_web_viewer=True)
+        _split_batches_by_color(viewer)
+        return viewer, None
 
     if kind == "viser":
         record = _prepare_output(args.output_path) if args.output_path else None

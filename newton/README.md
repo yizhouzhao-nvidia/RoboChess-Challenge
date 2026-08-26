@@ -501,6 +501,14 @@ several are the reason a line of code looks the way it does.
   are stale after `collapse_fixed_joints` and cancelled gravity on the first five chess pieces, and
   `mujoco:actuator_trnid` is not offset by `add_builder`, so a merged second arm's torque limits
   clamped the *first* arm. `ChessScene.describe()` reports both when they fire.
+* **Two viewers lose the piece colours, and both are shimmed.** `ViewerBase` batches shapes by
+  `_hash_shape(geo_hash, static, flags)`, and `geo_hash` folds in `newton.Mesh.__hash__`, which is
+  content-based -- so a white king and a black king land in one batch and the colour is not part of
+  the key. `ViewerRerun.log_instances` then applies `colors[0]` to the whole batch ("ReRun doesn't
+  support per-instance colors"), and every piece renders white.
+  `viewer_utils._split_batches_by_color()` splits a mixed batch into one rerun entity per colour.
+  Giving the two colours distinct `newton.Mesh` objects does *not* work -- the content hash
+  collapses them again. The GL viewer resolves colours per instance and needs neither shim.
 * **`ViewerUSD` drops the colours it is given, and we shim it.** Its `log_instances()` does
   `PrimvarsAPI(instance).GetPrimvar("displayColor").Set(...)` on a prim that never had the primvar
   created, so the `Set` is a silent no-op: every mesh in the exported stage renders in the default

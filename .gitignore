@@ -1,0 +1,4 @@
+# Render artifacts. The newton/ examples in newton/README.md write USD stages,
+# rerun recordings and videos here when run from the repo root; the scripts
+# themselves default to $ROBOCHESS_OUT_DIR or a temp directory instead.
+out/

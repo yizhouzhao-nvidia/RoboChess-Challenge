@@ -1,0 +1,5 @@
+# Byte-compiled cache. The transcoded geometry this port generates does NOT live here --
+# it goes to $ROBOCHESS_GENESIS_CACHE (default ~/.cache/robochess-genesis), outside the
+# repo, so there is nothing else here to ignore.
+__pycache__/
+*.py[cod]

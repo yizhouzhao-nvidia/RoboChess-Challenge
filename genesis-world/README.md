@@ -557,10 +557,56 @@ weaknesses of the port.
   It is the one piece that is not a solid of revolution, so it gets no yaw spin with which to thread the
   fingers between its neighbours — the planner's 12 candidates simply may not contain one that fits.
   `--num-grasp-candidates 64` is the flag for it; the JSON holds 64.
-* **The reBot cannot place a king**, 0/6 on `1d` at every gripper stiffness tried. Its jaws close on the
-  piece high up, so a 140 mm king hangs off the grip and swings during the place descent. The Newton port
-  records the same weakness on the same asset and names `tcp_offset` as the suspect; that diagnosis
-  applies here unchanged and is **not** fixed.
+* **The reBot and the YAM are both weak on `pieces` and `1d`, and the cause is now known.** It is not
+  grasping — both arms close on the piece and lift it. It is the **carry**. `carry_height` caps the
+  carried *piece's base* at `CARRY_REACH_FRACTION * reach`, but the hand grips a tall piece near its
+  *top*: for a 140 mm king the hand ends up ~127 mm higher than the base, **278 mm above the board**. On a
+  0.42 m arm reaching a far square that pose is outside the workspace, and what follows is worse than a
+  missed pose — Genesis' damped-least-squares solve saturates a joint limit, the next tick warm-starts
+  from the saturated posture, and the error compounds. Measured on `yam`/`pieces`, tracking across
+  `transfer`: **14 → 50 → 114 mm**, with `joint6` pinned at its +2.094 rad limit from step 40 of the
+  episode and `joint4` pinning during the carry.
+
+  The Newton port commands the *same* unreachable pose and survives it: its Levenberg-Marquardt solve
+  degrades gracefully, and on the same episode its error **shrinks** (29.6 → 16.6 → 5.9 → 4.7 mm) where
+  this port's grows. That is the whole difference, and it is a property of the two IK solvers rather than
+  of anything in this port's task logic.
+
+  Seven interventions were measured against it and **none is shipped**, because each either failed or
+  cost more elsewhere than it bought:
+
+  | tried | result |
+  |---|---|
+  | finer CoACD decomposition (0.1, 0.05, even 347 geoms) | 4/16 either way — no |
+  | IK iterations 24 → 50 | no change |
+  | larger IK step / lower damping | same or worse |
+  | soft joint limits (`respect_joint_limit=False`) | 3/16 — no |
+  | holding the previous solution when IK is unreachable | 3 → 5/16 |
+  | reachability-aware grasp selection | 3/16 — no |
+  | capping the *hand* height instead of the piece base | +1–2 on the weak cells, but **−4 on `franka`/`1d`** and −5 on `piper` |
+
+  The last one is the near miss: as a fraction of reach it still binds on the long arms, and reverting it
+  was the right call. A per-arm cap would keep the `rebot` gain (+3 across four cells) but that is inside
+  the ±2/cell noise band, so it is not worth the knob.
+* **The reBot cannot place a king**, 0/6 on `1d` at every gripper stiffness tried — a specific instance of
+  the above. The Newton port records the same weakness on the same asset and names `tcp_offset` as the
+  suspect.
+* **The most promising unexplored fix is the reBot's other asset.** The Newton port switched from the
+  `seeed_rebot_devarm` URDF to the `usd_structured` layer beside it — same bodies, joints and masses, but
+  an authored 8–12 part collision decomposition per link instead of a per-link convex hull — and went from
+  ~6/16 to **16/16 on `pieces`, `1d`, `3x3` and `4x4`**. Genesis cannot currently load that asset, for two
+  separate importer reasons, both diagnosed here:
+    1. `genesis/utils/usd/usd_material.py:39` follows a shader input's connection and calls
+       `UsdShade.Shader(...)` on the source. The mujoco-usd-converter connects each shader's
+       `diffuseColor` to the **Material's own public interface input**, so the source is a `Material`, not
+       a `Shader`, and it raises `RuntimeError: Accessed schema on invalid prim`. Flattening the stage,
+       de-instancing the Material prims (they are `instanceable`, so the shaders are instance proxies and
+       cannot be edited in place) and resolving the interface connections to literals clears this.
+    2. After that, `_parse_scene` returns no links and `rigid_entity.py:752` raises `IndexError`. Not
+       diagnosed further.
+
+  Anyone picking this up should start there: it is worth ~10 episodes per cell on the `rebot`, far more
+  than any tuning knob.
 * **The YAM is this port's weak arm**, where the reBot is the Newton port's. It needs the stiffest gripper
   of the four (1200) and is still well short of the reference on the boards with tall pieces. Its MJCF
   puts the finger pads on linkage child bodies (`lf_down`/`rf_down`) that the Newton port collapses into

@@ -101,7 +101,7 @@ picking task's `CHESS_ROBOTS`:
 |---|---|---|---|---|---|
 | `franka` | newton-assets `franka_emika_panda/urdf/fr3_franka_hand.urdf` | 7 + 2 | 80 mm | 0.68 m | 0.45 m |
 | `piper` | repo `assets/piper/piper_camera.usd` | 6 + 2 | 70 mm | 0.42 m | 0.30 m |
-| `rebot` | newton-assets `seeed_rebot_devarm/urdf/seeed_rebot_devarm.urdf` | 6 + 2 | 90 mm | 0.44 m | 0.30 m |
+| `rebot` | newton-assets `seeed_rebot_devarm/usd_structured/seeed_rebot_devarm.usda` | 6 + 2 | 90 mm | 0.44 m | 0.30 m |
 | `yam` | Menagerie `i2rt_yam/yam.xml` | 6 + 2 | 79 mm | 0.42 m | 0.30 m |
 
 ```bash
@@ -117,7 +117,8 @@ gripper at all.
 
 Jaw span is the commanded opening; `robots.py` documents where it differs from the raw asset limit
 and why (Piper's USD allows 50 mm per finger, YAM's finger *body* origins move opposite to its pads,
-Rebot's fingers are wedge-shaped so the usable slot at the TCP is 71 mm rather than 90 mm). Reach
+the Rebot's jaws are a true parallel 88 mm slot -- the 71 mm this file used to quote was the
+URDF convex hull's wedge measured at the TCP, not a property of the arm). Reach
 and board distance are carried over from the Isaac Lab `ChessRobotSpec` unchanged; the Rebot and YAM
 *home postures* are not — they had to be re-solved, because the Newton sources are a URDF and an
 MJCF with different joint frames from the USDs Isaac Lab loaded.
@@ -268,7 +269,7 @@ rate**.
 |---|---|---|---|---|---|
 | `franka` | **16/16** 100% | **16/16** 100% | **16/16** 100% | **16/16** 100% | 9/12 75% |
 | `piper` | 14/16 88% | 14/16 88% | **16/16** 100% | 15/16 94% | 10/12 83% |
-| `rebot` | 6/16 38% | 8/16 50% | 15/16 94% | 11-14/16 (median 13) | 1-3/12 |
+| `rebot` | **16/16** 100% | **16/16** 100% | **16/16** 100% | **16/16** 100% | 5/12 42% |
 | `yam` | 12/16 75% | **16/16** 100% | **16/16** 100% | 12/16 75% | 9/12 75% |
 
 ### Notes on the matrix
@@ -276,20 +277,28 @@ rate**.
 * **These are 16-sample estimates, and the weaker cells are not reproducible run to run.**
   Fixing the seed fixes the *move sequence*, not the trajectory: `SolverMuJoCo` on GPU is not
   bitwise deterministic across runs, and where a grasp is marginal that difference decides the
-  episode. `rebot`/`4x4` spans 11-14/16 over ten identical invocations at seed 0, and three
+  episode. This used to be worst on `rebot`, which spanned 11-14/16 over ten identical
+  invocations; since the asset switch below its `4x4` is 16/16 at 766 control ticks on every run.
+  Three
   identical runs differ in placement error from episode 1 onward. The Franka is stable in outcome,
   step count and tick count (`4x4` is 16/16 at 582 control ticks every time) and varies only in the
-  0.1 mm digit. Read a single cell as +-1 for the strong arms and +-3 for `rebot`.
+  0.1 mm digit. Read a single cell as +-1. The `8x8` figures are the least certain; `rebot`/`8x8`
+  in particular is a single run of twelve episodes, not a measurement.
 * **`3x3` is the floor of the port** — pawns only, comfortably inside every arm's reach, and three
   of the four arms take it 16/16.
 * **The Franka is the reference arm.** It is the only one at 100 % on three boards, and its 0.68 m
   reach is the only one that gets near a full 8x8 board (30 of 32 pieces, 36 legal destinations)
   or leaves more than one legal destination on `4x4` — see the `targets=1` limitation below.
-* **The Rebot is the weak arm**, and its failures are almost all `missed_target` — 9 of 16 on
-  `pieces`, 8 of 16 on `1d`. `--debug` shows why: it carries a pawn at roughly 38 mm of jaw opening, i.e.
-  around the piece's flare rather than its 11 mm neck, so the piece swings during the place descent
-  and drifts past the 20 mm tolerance. Its `tcp_offset` is the suspect. On the low, well-spaced
-  pieces of `3x3` and `4x4` it is fine (94 % and 88 %).
+* **The Rebot was the weak arm until its asset changed.** It loads from the newton-assets
+  `usd_structured` layer, a mujoco-usd-converter build of the same Menagerie source, rather than the
+  URDF beside it. Same ten bodies, same joints, same masses -- but the URDF points its collision
+  tags at full-resolution STLs, so the port used to convex-hull them at load time, and a per-link
+  hull of these fingers is a *wedge*: the free slot narrows from 83.5 mm at 5 mm depth to 20.0 mm at
+  64 mm. The USD ships an 8-12 part decomposition per link, which is a true parallel jaw at 88.25 mm
+  throughout. That single change takes the arm from 6/16 to 16/16 on `pieces` and from 13/16 to
+  16/16 on `4x4`. Ablation says the asset's authored joint damping is worth 1-2 of those episodes
+  and the collision geometry the other ~8, so it is not reachable by tuning the URDF path. Set
+  `ROBOCHESS_REBOT_SOURCE=urdf` to get the old loader back for an A/B.
 * **`8x8` is the hardest board for every arm**, for the reason you would expect: it is the one
   scenario that does not get the 1.4x board stretch, so it is 60 mm squares against an 80–90 mm open
   hand. The Franka's three failures there are all `board_disturbed` during `descend` — on a knight,
@@ -325,12 +334,12 @@ rate**.
   |---|---|---|
   | `franka` `4x4` | 16/16 100% | 16/16 100% |
   | `yam` `4x4` | 12/16 75% | 14/16 88% |
-  | `rebot` `4x4` | 14/16 88% | **1/16 6%** |
+  | `rebot` `4x4` | 16/16 100% | 15/16, 14/16, 15/16 |
 
-  The Franka is not merely equal but identical — the same 582 control ticks on both. The Rebot is
-  the opposite: at the shipped drive gains it is effectively broken on 1.2.1, and `--arm-ke 2000`
-  (the value that was reported to rescue it) only recovers it to 6/16. That is a solver-version
-  difference, not a code difference, and no per-version gain is baked in.
+  The Franka is not merely equal but identical — the same 582 control ticks on both. The Rebot
+  used to be the opposite: on the URDF it scored 1/16 on 1.2.1, reproducibly, against ~13/16 on 1.6.
+  The `usd_structured` asset closes that gap to within one episode, with no per-version gain baked
+  in — so the `--arm-ke 2000` workaround this file used to recommend is no longer needed.
 
 ## Where this maps onto `lab/`
 
@@ -451,18 +460,17 @@ confirmed the fixes moved labels and tick counts but no success count.)
 
 **Physics and rendering**
 
-* **The Rebot picks reliably only on newton 1.6.** On 1.2.1 the same command drops from ~13/16 to
-  1/16 (see the cross-interpreter table above). Pose tracking blows out to 44 mm / 13.8 deg during
-  `lift` where 1.6 holds a few mm -- same source, same gains, so it is a solver-version difference.
-  `--arm-ke 2000` recovers it to about 6/16. No per-version gain is baked in. The other three arms
-  are fine on both.
-* **`rebot` on `8x8` does not settle like the other arms**: repeatably one piece rests ~0.8 mm high
-  (`dz_mm -1.72..-0.55` against everything else's -1.67..-1.25 band), which looks like a piece
-  resting on the arm's base plate.
-* **The Rebot grips high on the piece.** `--debug` shows it carrying a pawn at ~38 mm of jaw
-  opening -- around the flare rather than the 11 mm neck -- so the piece swings during the place
-  descent. Its `tcp_offset` is the suspect, and it is the likeliest single fix for the whole rebot
-  column.
+* **`rebot` on `8x8` leaves one piece high.** Repeatably `piece_white_bishop_0`, 1.84–1.93 mm above
+  the board on newton 1.6 and 0.17 mm on 1.2.1, resting on a 1.8 mm bulge in the `base_link`
+  decomposition. Every other piece, every other board and every other arm stays in the −1.67..−1.25
+  band. `ROBOCHESS_REBOT_SOURCE=urdf` does not show it; the URDF's coarser hull happens to miss.
+* **`rebot` costs ~16 % more per step on `8x8`** (89 vs 77 ms/frame, every rep above every URDF rep)
+  — 82 extra colliders per arm meeting 32 pieces. Within noise on every smaller board. It buys a
+  16-fold better jaw, so it is worth paying, but it is real.
+* **One warning on newton 1.2.1 only**: `MjcEqualityJointAPI on '…/joint_left' has no mjc:target
+  relationship; skipping`. That is the Rebot's finger coupling being dropped — 1.6 honours it as an
+  equality row. Measured jaw drift over four full pick episodes: 2.1e-4 m coupled, 2.6e-3 m
+  uncoupled. Both fingers are commanded explicitly either way, so it costs nothing measurable.
 * **`8x8` is the genuine weak board for every arm.** It is the one scenario that does not get the
   1.4x board stretch, so it is 60 mm squares against an 80-90 mm open hand.
   `--num-grasp-candidates 64` recovers most of the gap; widening the board does not.

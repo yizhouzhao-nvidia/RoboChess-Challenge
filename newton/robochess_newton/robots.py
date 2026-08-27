@@ -60,6 +60,7 @@ if Path(newton.__file__).resolve().is_relative_to(REPO_ROOT):
 __all__ = [
     "MENAGERIE_REF",
     "NEWTON_ASSETS_REF",
+    "REBOT_SOURCE",
     "ROBOTS",
     "ROBOT_OPTIONS",
     "UNSUPPORTED_ROBOTS",
@@ -199,12 +200,24 @@ class NewtonRobotSpec:
     target_ke: float = 2000.0
     """Position-drive stiffness applied to every DOF of this arm.
 
-    Every source except the SO-101 MJCF imports with ``ke = 0`` (URDF and USD
-    carry no MuJoCo actuator, and the Menagerie ``<general>`` actuators are not
-    converted), which leaves the arm limp. 2000/100 was measured to hold every entry
-    of :data:`ROBOTS` -- the four supported arms and the three unsupported ones --
+    Most sources import with ``ke = 0`` (the URDFs and the piper/ur10 USDs carry no
+    MuJoCo actuator, and the Menagerie ``<general>`` actuators are not converted),
+    which leaves the arm limp. 2000/100 was measured to hold every entry of
+    :data:`ROBOTS` -- the four supported arms and the three unsupported ones --
     within 0.026 rad of its home pose even with gravity compensation off. Picking
     needs a different split; see ``pick.apply_pick_gains``.
+
+    Two sources do author gains, and the override is still applied to both rather
+    than deferring to them, because it measures no worse and keeps one number
+    across the table. The SO-101 MJCF ships ``kp = 998.22``. The reBot
+    ``usd_structured`` asset ships 900/60 on joints 1-3, 120/10 on 4-6 and 5000/41.28
+    on the fingers; holding its home pose for 120 frames, rebot/4x4, newton 1.6:
+
+        gravity compensation on   authored 2.861e-08 rad   override 2.861e-08 rad
+        gravity compensation off  authored 6.305e-03 rad   override 2.508e-03 rad
+
+    i.e. identical where it matters and 2.5x tighter where it does not. Picking
+    overwrites both anyway.
     """
 
     target_kd: float = 100.0
@@ -316,7 +329,115 @@ def _load_piper(builder: newton.ModelBuilder, xform: wp.transform):
     )
 
 
-def _load_rebot(builder: newton.ModelBuilder, xform: wp.transform):
+REBOT_SOURCE = os.environ.get("ROBOCHESS_REBOT_SOURCE", "usd").strip().lower()
+"""Which newton-assets ``seeed_rebot_devarm`` layer the reBot is imported from.
+
+``"usd"`` (the default) is ``usd_structured/seeed_rebot_devarm.usda``, ``"urdf"`` is
+``urdf/seeed_rebot_devarm.urdf``. Read once at import, so
+
+    ROBOCHESS_REBOT_SOURCE=urdf python newton/scripts/run_chess_pick.py --robot rebot ...
+
+A/Bs the two without editing anything, on either script. The URDF was the default
+until the USD was measured against it and is kept reachable as the regression
+baseline; it is not otherwise recommended. Pick success, ``--robot rebot
+--world-count 8 --num-episodes 16 --seed 0 --viewer null`` (``8x8`` at 6/12), three
+runs per cell, newton 1.6:
+
+    scenario   usd_structured        urdf
+    pieces     16/16 16/16 16/16     6/16  7/16  7/16
+    1d         16/16 16/16 16/16     8/16  8/16  7/16
+    3x3        16/16 16/16 16/16     16/16 15/16 15/16
+    4x4        16/16 16/16 16/16     13/16 13/16 12/16
+    8x8         5/12  4/12  5/12     3/12  3/12  2/12
+
+and ``4x4`` on newton 1.2.1, where this arm was previously unusable:
+
+    4x4        14/16 15/16 15/16     1/16 (README, unchanged)
+"""
+
+_REBOT_SOURCES = ("usd", "urdf")
+
+if REBOT_SOURCE not in _REBOT_SOURCES:
+    raise ValueError(f"ROBOCHESS_REBOT_SOURCE={REBOT_SOURCE!r}, expected one of {_REBOT_SOURCES}")
+
+
+def _load_rebot_usd(builder: newton.ModelBuilder, xform: wp.transform):
+    """The mujoco-usd-converter output of Menagerie's ``seeed_rebot_devarm.xml``.
+
+    The win is the collision geometry, and it is a shape problem rather than a
+    resolution one. The URDF's per-link convex hull is a *wedge*: measured as the free
+    interval along the closing axis, it narrows from 83.5 mm at 5 mm depth to 20.0 mm
+    at 64 mm, about 1.05 mm per mm. The USD's 8-12 part decomposition is a true
+    parallel jaw -- 88.25 mm at every depth. (The "71 mm usable slot at the TCP" this
+    port used to document was that wedge measured at ``tcp_offset``, an artefact of
+    ``approximate_meshes("convex_hull")`` rather than a property of the arm.) Ablation:
+    giving the URDF path the USD's damping and frictionloss is worth 1-2 episodes of
+    the ~10-episode gain; the rest is the geometry, so it cannot be tuned for.
+
+    Two things survive to ``mj_model`` that the override does not touch: joint
+    ``damping`` (5/5/5/2/2/2/1/1) and ``frictionloss`` (0.2). ``armature`` is
+    overridden. Cost: +16 % per step on 8x8, where 82 extra colliders per arm meet 32
+    pieces; within noise on every smaller board.
+
+    Same ten bodies, same eight joints, the same labels and the same masses as the
+    URDF next to it, so every geometric field of the spec carries over unchanged --
+    but the physics is authored rather than defaulted, and that is the reason to
+    prefer it:
+
+    * **Colliders.** 92 ``CONVEX_MESH`` parts (8-12 per link, 5,585 vertices, largest
+      64) against the URDF's ten raw ``MESH`` colliders at 364,392 vertices. The
+      URDF path has to run :meth:`~newton.ModelBuilder.approximate_meshes` to be
+      steppable at all; calling it here would *lose* information -- one hull per link
+      inflates collision volume to 3.24x the true link volume against 1.89x for the
+      decomposition (asset README) -- as well as costing the hull solve, so it is
+      not called.
+    * **Drives.** ``ke = 900/900/900/120/120/120`` and ``kd = 60/60/60/10/10/10`` on
+      the arm, 5000/41.28 on the fingers, plus ``armature = 0.01``, joint damping
+      5/5/5/2/2/2/1/1 and ``frictionloss = 0.2``, all imported on both interpreters.
+      The URDF imports ``ke = kd = armature = damping = 0``. :func:`load_robot` still
+      overrides ``ke``/``kd``; see :attr:`NewtonRobotSpec.target_ke` for why.
+    * **Finger coupling.** ``NewtonMimicAPI``/``MjcEqualityJointAPI`` 1:1 between
+      ``joint_left`` and ``joint_right``. Honoured on newton 1.6 (one
+      ``mujoco:equality_constraint`` row, joints 8 and 9, polycoef ``[0, 1, 0, 0, 0]``)
+      and *dropped* on 1.2.1, whose importer looks for an ``mjc:target`` relationship
+      the converter does not author and warns ``MjcEqualityJointAPI on
+      '.../joint_left' has no mjc:target relationship; skipping``. Both fingers are
+      commanded explicitly either way -- which is what the URDF already required --
+      so the drop is survivable but not free. Worst ``|q_left - q_right|`` over four
+      rebot/4x4 pick episodes, logged every control tick:
+
+          USD, newton 1.6   (coupled)    2.1e-4 m, during ``transfer``
+          USD, newton 1.2.1 (dropped)    2.6e-3 m, during ``close``
+          URDF, newton 1.6  (no such constraint in the asset)  1.5e-3 m
+
+      i.e. the coupling buys an order of magnitude in jaw symmetry where it is
+      honoured, and where it is not the arm is no worse off than it was on the URDF.
+
+    ``enable_self_collisions=False`` matches every other arm here, which also makes
+    the asset's eleven ``physics:filteredPairs`` moot -- they exist to make
+    self-collision usable, and nothing in this port turns it on.
+
+    The one regression: the decomposition's parts bulge 1-2 mm past the concave
+    surface (the asset README says so), and ``base_link``'s eight parts span
+    ``x -0.2718..-0.1282, y +-0.1018, z 0.7682..0.8468`` in world coordinates against
+    the hull's ``x -0.2700..-0.1300, y +-0.1000, z 0.7700..0.8450`` -- 1.8 mm proud on
+    every face. ``8x8`` is the only board that stands a piece against that: white
+    bishop 0, at ``(-0.0958, -0.0966)``, settles 1.94 mm *high* in three runs out of
+    three (``dz_mm -1.71..+1.94``) where the hull leaves it at -0.4 mm. Every other
+    piece and every other scenario settles in the usual -1.67..-1.25 band, and the
+    ``8x8`` pick rate goes up rather than down (4-5/12 against 2-3/12), so this is
+    logged, not fixed.
+    """
+    return builder.add_usd(
+        str(newton_asset("seeed_rebot_devarm") / "usd_structured" / "seeed_rebot_devarm.usda"),
+        xform=xform,
+        collapse_fixed_joints=False,  # keeps gripper_end, which is the IK target
+        enable_self_collisions=False,
+        hide_collision_shapes=True,  # 92 collider parts on top of 23 render meshes
+    )
+
+
+def _load_rebot_urdf(builder: newton.ModelBuilder, xform: wp.transform):
     first_shape = builder.shape_count
     result = builder.add_urdf(
         str(newton_asset("seeed_rebot_devarm") / "urdf" / "seeed_rebot_devarm.urdf"),
@@ -343,6 +464,31 @@ def _load_rebot(builder: newton.ModelBuilder, xform: wp.transform):
         if builder.shape_flags[shape] & newton.ShapeFlags.COLLIDE_SHAPES
     ]
     builder.approximate_meshes(method="convex_hull", shape_indices=hull_shapes, raise_on_failure=True)
+    return result
+
+
+def _load_rebot(builder: newton.ModelBuilder, xform: wp.transform):
+    if REBOT_SOURCE == "urdf":
+        return _load_rebot_urdf(builder, xform)
+
+    first_actuator = _actuator_row_count(builder)
+    result = _load_rebot_usd(builder, xform)
+    # The USD carries eight MjcActuator prims. BOTH importers build all eight rows
+    # identically -- forcerange +-36 Nm on joints 1-3, +-14 on 4-6, +-1904 N on the
+    # two fingers, ctrlrange equal to the joint limits. The versions diverge in the
+    # SOLVER, not the importer: mj_model.actuator_forcerange keeps those values on
+    # newton 1.6 and is (0, 0) on 1.2.1 whatever the builder rows say. Those limits size the
+    # asset's own kp of 120-900; this port drives at 2000-4000 and routes gravity
+    # compensation through the same actuators, so keeping them both clamps the drive
+    # and makes the two interpreters disagree. Same call, same reasoning as yam -- see
+    # _clear_imported_actuator_limits -- but here it is worth 9 of 16 episodes:
+    # rebot/4x4, 8 worlds x 16 at seed 0, newton 1.6, three runs each,
+    #     cleared  16/16 16/16 16/16      kept  7/16 7/16 7/16
+    # and the kept runs fail as missed_target (8 of the 9 failures), which is the
+    # drive saturating and the arm lagging its command: placement error over the
+    # episodes that still succeed runs 3.6-12.0 mm against 1.1-2.6 mm cleared, and
+    # the ones that do not land 67-340 mm from the destination square.
+    _clear_imported_actuator_limits(builder, first_actuator)
     return result
 
 
@@ -386,7 +532,10 @@ def _clear_imported_actuator_limits(builder: newton.ModelBuilder, first_row: int
     ``ctrlrange`` rounds up to 0, so the jaws stop 2 mm short of the grip.
 
     Clearing them makes newton 1.6 agree with 1.2.1 rather than the other way round.
-    No-op for the URDF and USD arms, which import no actuator rows at all.
+    A no-op for arms whose source carries no actuator rows, but NOT for the rebot USD:
+    that asset imports eight of them, and this call is what keeps them from clamping
+    the drive. Keeping them costs 9 of 16 episodes on rebot/4x4 (7/16 against 16/16,
+    three runs each, failing missed_target).
     """
     limits = {
         "mujoco:actuator_forcerange": wp.vec2f(0.0, 0.0),
@@ -524,7 +673,11 @@ ROBOTS: dict[str, NewtonRobotSpec] = {
     "rebot": NewtonRobotSpec(
         key="rebot",
         load=_load_rebot,
-        source="newton-assets seeed_rebot_devarm/urdf/seeed_rebot_devarm.urdf",
+        source=(
+            "newton-assets seeed_rebot_devarm/usd_structured/seeed_rebot_devarm.usda"
+            if REBOT_SOURCE == "usd"
+            else "newton-assets seeed_rebot_devarm/urdf/seeed_rebot_devarm.urdf"
+        ),
         arm_dofs=(0, 1, 2, 3, 4, 5),  # joint1..6
         gripper_dofs=(6, 7),  # joint_left, joint_right, both [0, 0.05], same sign
         ee_body="gripper_end",
@@ -532,18 +685,29 @@ ROBOTS: dict[str, NewtonRobotSpec] = {
         tcp_offset=(-0.015, 0.0, 0.0),
         approach_axis=(1.0, 0.0, 0.0),
         closing_axis=(0.0, 1.0, 0.0),
-        # The URDF's mimic constraint between the two fingers is dropped on import
-        # (Newton warns about the missing mjc:target), so both have to be commanded.
+        # Both fingers are always commanded. The URDF authors no mimic constraint at
+        # all (grep -ci mimic on it is 0), so there is nothing to drop there; the USD
+        # authors one, which newton 1.6 honours as an equality row and 1.2.1 skips
+        # for want of an mjc:target relationship (see _load_rebot_usd). So no version
+        # of this arm can be driven through joint_left alone. Worst measured jaw
+        # drift over four full pick episodes: 2.1e-4 m coupled (USD on 1.6),
+        # 2.6e-3 m uncoupled (USD on 1.2.1), 1.5e-3 m (URDF, no constraint). Measured on both sources and both interpreters:
+        # the open command gives 0.09015 m of gripper_left/gripper_right body
+        # separation and the closed command 0.00015 m.
         gripper_open=(0.045, 0.045),
         gripper_close=(0.0, 0.0),
         max_opening=0.09,
         reach=0.44,
         board_distance=0.30,
         base_pos=(-0.20, 0.0, 0.77),
-        # Retuned for this asset: Isaac Lab's (0, -1.25, -1.55, 0, -0.75, 0) was
-        # measured on the Seeed USD, whose joint frames differ from this URDF's, and
-        # leaves the gripper pointing up and sideways. This puts the TCP 0.24 m over
-        # the board centre with the approach axis 18 degrees off straight down.
+        # Same for both sources: the USD's joint frames are the URDF's. Held for 120
+        # frames at rest, the TCP lands on (0.09395, 0, 1.00961) either way, so
+        # nothing below this line changed when the source did. Retuned for these
+        # frames rather than Isaac Lab's (0, -1.25, -1.55, 0, -0.75, 0), which was
+        # measured on the Seeed USD Isaac Lab spawns -- a different asset from the
+        # newton-assets one -- and leaves the gripper pointing up and sideways. This
+        # puts the TCP 0.24 m over the board centre with the approach axis 18 degrees
+        # off straight down.
         home_joint_pos=(0.0, -1.50, -1.72, 1.48, 0.0, 0.0),
     ),
     "yam": NewtonRobotSpec(
